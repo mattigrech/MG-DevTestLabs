@@ -233,4 +233,4 @@
       "value": "[resourceId('Microsoft.DevTestLab/labs', parameters('newLabName'))]"
     }
   }
-}, sdf
+}
