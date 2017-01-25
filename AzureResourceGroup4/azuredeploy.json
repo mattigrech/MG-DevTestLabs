@@ -1,8 +1,236 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
-  "parameters": {},
-  "variables": {},
-  "resources": [],
-  "outputs": {}
+  "parameters": {
+    "CostCentre": {
+      "type": "string",
+      "metadata": {
+        "description": "Please enter your project cost centre"
+      }
+    },
+    "newLabName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the new lab instance to be created, note your lab name will be concatenated as DTL-costcode-labname."
+      }
+    },
+    "NamingPrefix": {
+      "type": "string",
+      "defaultValue": "dtl00x",
+      "metadata": {
+        "description": "The naming prefix for all virtual machines"
+      }
+    },
+
+    "DCCount": {
+      "type": "int",
+      "defaultValue": 1,
+
+      "metadata": {
+        "description": "Select the number of Domain Controllers to provision"
+      }
+    },
+
+    "MemberServerCount": {
+      "type": "int",
+      "defaultValue": 1,
+
+      "metadata": {
+        "description": "Select the number of Member Servers to provision"
+      }
+    },
+    "labVmShutDownTime": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 5,
+      "defaultValue": "06:00",
+      "metadata": {
+        "description": "The time (Timezone is set to UTC) at which the Lab VMs will be automatically shutdown (E.g 5pm AEDT = 6am UTC)."
+      }
+    },
+    "timeZoneId": {
+      "type": "string",
+      "minLength": 3,
+      "defaultValue": "UTC",
+      "metadata": {
+        "description": "The Windows time zone id associated with labVmShutDownTime (UTC is the standardised time)."
+      }
+    },
+    "AdminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Administrative User for VM login"
+      }
+    },
+    "Adminpassword": {
+      "type": "securestring",
+      "minLength": 5,
+      "metadata": {
+        "description": "Administrative password used for servers deployed by this template"
+      }
+    },
+    "VMSize": {
+      "type": "string",
+      "defaultValue": "Standard_DS1_v2",
+      "metadata": {
+        "description": "The size of all the VMs to be created in the lab."
+      }
+    },
+    "VMStorageType": {
+      "type": "string",
+      "defaultValue": "Premium",
+      "metadata": {
+        "description": "The storage type ('Premium' or 'Standard') of all the VMs to be created in the lab."
+      }
+    },
+    "maxAllowedVmsPerUser": {
+      "type": "int",
+      "minValue": 0,
+      "DefaultValue": "2",
+      "metadata": {
+        "description": "The maximum number of VMs allowed per USER."
+      }
+    },
+    "maxAllowedVmsPerLab": {
+      "type": "int",
+      "minValue": 0,
+      "metadata": {
+        "description": "The maximum number of VMs allowed per LAB."
+      }
+    },
+    "allowedVmSizes": {
+      "type": "string",
+      "defaultValue": "\"Standard_A5\", \"Standard_A3\", \"Standard_A2\"",
+      "minLength": 3,
+      "metadata": {
+        "description": "A comma-separated list of VM sizes that are allowed in the lab."
+      }
+    }
+  },
+  "variables": {
+    "labVirtualNetworkName": "[concat('DTL-VNET', parameters ('CostCentre'), parameters('newLabName'))]",
+    "V-DCVMName":  "concat('DTL-DC-, parameters ('newlabname'))]",
+    "V-VMName": "[concat('DTL-MS-', parameters ('newLabName'))]",
+    "labVirtualNetworkId": "[resourceId('Microsoft.DevTestLab/labs/virtualNetworks', parameters('newLabName'), variables('labVirtualNetworkName'))]",
+    "labSubnetName": "[concat(variables('labVirtualNetworkName'), 'Subnet')]",
+    "username": "AzureAdmin"
+  
+  },
+  "resources": [
+
+    {
+      "apiVersion": "2016-05-15",
+      "type": "Microsoft.DevTestLab/labs",
+      "name": "[trim(parameters('newLabName'))]",
+      "location": "[resourceGroup().location]",
+      "resources": [
+        {
+          "apiVersion": "2016-05-15",
+          "name": "[variables('labVirtualNetworkName')]",
+          "type": "virtualNetworks",
+          "dependsOn": [
+            "[resourceId('Microsoft.DevTestLab/labs', parameters('newLabName'))]"
+          ]
+        },
+        {
+          "apiVersion": "2016-05-15",
+          "name": "LabVmsShutdown",
+          "type": "schedules",
+          "dependsOn": [
+            "[resourceId('Microsoft.DevTestLab/labs', parameters('newLabName'))]"
+          ],
+          "properties": {
+            "status": "enabled",
+            "taskType": "LabVmsShutdownTask",
+            "timeZoneId": "[string(parameters('timeZoneId'))]",
+            "dailyRecurrence": {
+              "time": "[string(parameters('labVmShutDownTime'))]"
+            }
+          }
+        },
+        {
+          "apiVersion": "2016-05-15",
+          "name": "default/MaxVmsAllowedPerUser",
+          "type": "policySets/policies",
+          "dependsOn": [
+            "[resourceId('Microsoft.DevTestLab/labs', parameters('newLabName'))]"
+          ],
+          "properties": {
+            "description": "",
+            "factName": "UserOwnedLabVmCount",
+            "threshold": "[string(parameters('maxAllowedVmsPerUser'))]",
+            "evaluatorType": "MaxValuePolicy",
+            "status": "enabled"
+          }
+        },
+        {
+          "apiVersion": "2016-05-15",
+          "name": "default/MaxVmsAllowedPerLab",
+          "type": "policySets/policies",
+          "dependsOn": [
+            "[resourceId('Microsoft.DevTestLab/labs', parameters('newLabName'))]"
+          ],
+          "properties": {
+            "description": "",
+            "factName": "LabVmCount",
+            "threshold": "[string(parameters('maxAllowedVmsPerLab'))]",
+            "evaluatorType": "MaxValuePolicy",
+            "status": "enabled"
+          }
+        },
+        {
+          "apiVersion": "2016-05-15",
+          "name": "default/AllowedVmSizesInLab",
+          "type": "policySets/policies",
+          "dependsOn": [
+            "[resourceId('Microsoft.DevTestLab/labs', parameters('newLabName'))]"
+          ],
+          "properties": {
+            "description": "",
+            "factName": "LabVmSize",
+            "threshold": "[concat('[', trim(parameters('allowedVmSizes')), ']')]",
+            "evaluatorType": "AllowedValuesPolicy",
+            "status": "enabled"
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2016-05-15",
+      "name": "[concat(parameters('newLabName'), '/', 'DTLDC', copyIndex())]",
+      "type": "Microsoft.DevTestLab/labs/virtualmachines",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.DevTestLab/labs', parameters('newLabName'))]"
+      ],
+      "copy": {
+        "name": "DCCopy",
+        "count": "[parameters('DCCount')]"
+      },
+
+      "properties": {
+        "galleryImageReference": {
+          "offer": "WindowsServer",
+          "publisher": "MicrosoftWindowsServer",
+          "sku": "2012-R2-Datacenter",
+          "osType": "Windows",
+          "version": "latest"
+        },
+        "size": "[parameters('VMSize')]",
+        "storageType": "[parameters('VMStorageType')]",
+        "isAuthenticationWithSshKey": false,
+        "userName": "[parameters('AdminUsername')]",
+        "sshKey": "",
+        "password": "[parameters('Adminpassword')]",
+        "labVirtualNetworkId": "[variables('labVirtualNetworkId')]",
+        "labSubnetName": "[variables('labSubnetName')]"
+      }
+    }
+  ],
+  "outputs": {
+    "labId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.DevTestLab/labs', parameters('newLabName'))]"
+    }
+  }
 }
