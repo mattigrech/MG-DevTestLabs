@@ -24,8 +24,8 @@
 
     "DCCount": {
       "type": "int",
+      "maxValue": 2,
       "defaultValue": 1,
-
       "metadata": {
         "description": "Select the number of Domain Controllers to provision"
       }
@@ -72,13 +72,15 @@
     "VMSize": {
       "type": "string",
       "defaultValue": "Standard_DS1_v2",
+
       "metadata": {
         "description": "The size of all the VMs to be created in the lab."
       }
     },
     "VMStorageType": {
       "type": "string",
-      "defaultValue": "Premium",
+      "defaultValue": "Standard",
+
       "metadata": {
         "description": "The storage type ('Premium' or 'Standard') of all the VMs to be created in the lab."
       }
@@ -100,7 +102,7 @@
     },
     "allowedVmSizes": {
       "type": "string",
-      "defaultValue": "\"Standard_A5\", \"Standard_A3\", \"Standard_A2\"",
+      "defaultValue": "\"Standard_A5\", \"Standard_A3\", \"Standard_A2\", \"Standard_DS1_v2\"",
       "minLength": 3,
       "metadata": {
         "description": "A comma-separated list of VM sizes that are allowed in the lab."
@@ -109,12 +111,13 @@
   },
   "variables": {
     "labVirtualNetworkName": "[concat('DTL-VNET', parameters ('CostCentre'), parameters('newLabName'))]",
-    "V-DCVMName":  "concat('DTL-DC-, parameters ('newlabname'))]",
+    "V-DCVMName": "concat('DTL-DC-, parameters ('newlabname'))]",
     "V-VMName": "[concat('DTL-MS-', parameters ('newLabName'))]",
+    "pilotDCName": "DTLDC",
+    "pilotMSName": "DTLMS",
     "labVirtualNetworkId": "[resourceId('Microsoft.DevTestLab/labs/virtualNetworks', parameters('newLabName'), variables('labVirtualNetworkName'))]",
-    "labSubnetName": "[concat(variables('labVirtualNetworkName'), 'Subnet')]",
-    "username": "AzureAdmin"
-  
+    "labSubnetName": "[concat(variables('labVirtualNetworkName'), 'Subnet')]"
+
   },
   "resources": [
 
@@ -195,27 +198,26 @@
         }
       ]
     },
+
+
     {
       "apiVersion": "2016-05-15",
-      "name": "[concat(parameters('newLabName'), '/', 'DTLDC', copyIndex())]",
       "type": "Microsoft.DevTestLab/labs/virtualmachines",
+      "name": "[concat(parameters('newLabName'), '/', variables('pilotDCName'), copyIndex())]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[resourceId('Microsoft.DevTestLab/labs', parameters('newLabName'))]"
+        "[variables('labVirtualNetworkId')]"
       ],
       "copy": {
-        "name": "DCCopy",
-        "count": "[parameters('DCCount')]"
+        "name": "DCCount",
+        "count": "[parameters('dccount')]"
       },
-
+      "tags": {
+        "Role": "Domain Controller",
+        "CostCode": "[parameters('costcentre')]",
+        "LabName": "[parameters('newLabName')]"
+      },
       "properties": {
-        "galleryImageReference": {
-          "offer": "WindowsServer",
-          "publisher": "MicrosoftWindowsServer",
-          "sku": "2012-R2-Datacenter",
-          "osType": "Windows",
-          "version": "latest"
-        },
         "size": "[parameters('VMSize')]",
         "storageType": "[parameters('VMStorageType')]",
         "isAuthenticationWithSshKey": false,
@@ -223,9 +225,54 @@
         "sshKey": "",
         "password": "[parameters('Adminpassword')]",
         "labVirtualNetworkId": "[variables('labVirtualNetworkId')]",
-        "labSubnetName": "[variables('labSubnetName')]"
+        "labSubnetName": "[variables('labSubnetName')]",
+        "galleryImageReference": {
+          "offer": "WindowsServer",
+          "publisher": "MicrosoftWindowsServer",
+          "sku": "2012-R2-Datacenter",
+          "osType": "Windows",
+          "version": "latest"
+        }
+      }
+    },
+
+
+    {
+      "apiVersion": "2016-05-15",
+      "type": "Microsoft.DevTestLab/labs/virtualmachines",
+      "name": "[concat(parameters('newLabName'), '/', variables('pilotMSName'), copyIndex())]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[variables('labVirtualNetworkId')]"
+      ],
+      "copy": {
+        "name": "DCCount",
+        "count": "[parameters('MemberServerCount')]"
+      },
+      "tags": {
+        "Role": "Member Server",
+        "CostCode": "[parameters('costcentre')]",
+        "LabName":  "[parameters('newLabName')]"
+      },
+      "properties": {
+        "size": "[parameters('VMSize')]",
+        "storageType": "[parameters('VMStorageType')]",
+        "isAuthenticationWithSshKey": false,
+        "userName": "[parameters('AdminUsername')]",
+        "sshKey": "",
+        "password": "[parameters('Adminpassword')]",
+        "labVirtualNetworkId": "[variables('labVirtualNetworkId')]",
+        "labSubnetName": "[variables('labSubnetName')]",
+        "galleryImageReference": {
+          "offer": "WindowsServer",
+          "publisher": "MicrosoftWindowsServer",
+          "sku": "2012-R2-Datacenter",
+          "osType": "Windows",
+          "version": "latest"
+        }
       }
     }
+
   ],
   "outputs": {
     "labId": {

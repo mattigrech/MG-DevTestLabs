@@ -297,7 +297,8 @@
         }
       ]
     },
-    {
+   
+     {
       "apiVersion": "2016-05-15",
       "type": "Microsoft.DevTestLab/labs/virtualmachines",
       "name": "[concat(parameters('newLabName'), '/', parameters('pilotVMName'))]",
@@ -340,6 +341,8 @@
         "description": "[parameters('devBoxTemplateDescription')]"
       }
     },
+
+
     {
       "apiVersion": "2016-05-15",
       "name": "[variables('testTemplateResourceName')]",
